@@ -13,6 +13,7 @@ import {
   Shield,
   LogOut,
 } from 'lucide-react';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
 
@@ -71,9 +72,7 @@ export function Sidebar() {
       <div className="p-3 border-t border-border/80 bg-muted/20">
         <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="h-8 w-8 rounded-full bg-primary/10 border border-border flex items-center justify-center font-bold text-xs uppercase text-primary shrink-0">
-              {user?.name ? user.name.charAt(0) : 'P'}
-            </div>
+            <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} size="sm" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold truncate text-foreground">{user?.name || 'Project Admin'}</p>
               <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'admin@vault.io'}</p>

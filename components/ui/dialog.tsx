@@ -38,7 +38,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
       />
       {/* Content wrapper */}
       <div className="relative z-[101] w-full max-h-[90vh] flex flex-col items-center justify-center pointer-events-none">
-        <div className="pointer-events-auto w-full flex justify-center">
+        <div className="pointer-events-auto w-full flex justify-center max-h-[90vh]">
           {children}
         </div>
       </div>
@@ -60,7 +60,7 @@ export function DialogContent({
       role="dialog"
       aria-modal="true"
       className={cn(
-        'modal-surface dialog-content relative mx-auto w-full max-w-lg overflow-y-auto rounded-[8px] border border-border bg-card p-6 text-card-foreground shadow-2xl animate-in zoom-in-95 duration-150',
+        'modal-surface dialog-content relative mx-auto w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[8px] border border-border bg-card p-6 text-card-foreground shadow-2xl animate-in zoom-in-95 duration-150',
         className
       )}
       style={{ backgroundColor: 'var(--card)', color: 'var(--card-foreground)', opacity: 1 }}

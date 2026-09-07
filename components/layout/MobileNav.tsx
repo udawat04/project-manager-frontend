@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Shield, X, LogOut } from 'lucide-react';
 import { NAVIGATION_ITEMS } from './Sidebar';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
 
@@ -76,9 +77,12 @@ export function MobileNav({ open, onClose }: { open: boolean; onClose: () => voi
         {/* Footer */}
         <div className="p-4 border-t border-border bg-muted/20">
           <div className="flex items-center justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold truncate text-foreground">{user?.name || 'Admin'}</p>
-              <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'admin@vault.io'}</p>
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <UserAvatar name={user?.name} avatarUrl={user?.avatarUrl} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold truncate text-foreground">{user?.name || 'Admin'}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{user?.email || 'admin@vault.io'}</p>
+              </div>
             </div>
             <button
               onClick={() => {

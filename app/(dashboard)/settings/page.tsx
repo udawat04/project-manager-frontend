@@ -21,6 +21,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { ImageUploadPicker } from '@/components/ui/image-upload-picker';
 import { useAuth } from '@/providers/auth-provider';
 import { useTheme } from '@/providers/theme-provider';
 import { api } from '@/lib/api';
@@ -36,8 +37,35 @@ export default function SettingsPage() {
   const [profileEmail, setProfileEmail] = React.useState('');
   const [emailOtp, setEmailOtp] = React.useState('');
   const [profileLoading, setProfileLoading] = React.useState(false);
+  const [avatarUploading, setAvatarUploading] = React.useState(false);
   const [emailOtpSending, setEmailOtpSending] = React.useState(false);
   const [emailOtpCooldown, setEmailOtpCooldown] = React.useState(0);
+
+  const handleDirectAvatarUpload = async (file: File) => {
+    setAvatarUploading(true);
+    try {
+      const res = await api.uploadMyAvatar(file);
+      setProfileAvatarUrl(res.avatarUrl);
+      await refreshUser();
+      toast.success('Profile photo uploaded and saved successfully');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload profile photo');
+      throw err;
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setProfileAvatarUrl('');
+    try {
+      await api.updateProfile({ avatarUrl: null });
+      await refreshUser();
+      toast.success('Profile photo removed');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to remove photo');
+    }
+  };
 
   // Password Change State
   const [currentPassword, setCurrentPassword] = React.useState('');
@@ -203,27 +231,29 @@ export default function SettingsPage() {
         </div>
 
         <form onSubmit={handleUpdateProfile} className="space-y-4 pt-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">Full Name</label>
-              <Input
-                type="text"
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                placeholder="Your Name"
-                required
-              />
-            </div>
+          {/* Profile Photo Device Upload */}
+          <div className="p-4 bg-muted/20 border border-border rounded-lg space-y-2">
+            <label className="text-xs font-semibold text-foreground block">Profile Photo</label>
+            <ImageUploadPicker
+              currentImageUrl={profileAvatarUrl}
+              name={profileName || user?.name}
+              size="lg"
+              isUploading={avatarUploading}
+              onDirectUpload={handleDirectAvatarUpload}
+              onRemoveImage={handleRemoveAvatar}
+              helperText="Upload an avatar image from your device. Optimized and stored securely on Cloudinary."
+            />
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-foreground">Avatar Image URL (Optional)</label>
-              <Input
-                type="url"
-                value={profileAvatarUrl}
-                onChange={(e) => setProfileAvatarUrl(e.target.value)}
-                placeholder="https://example.com/avatar.jpg"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Full Name</label>
+            <Input
+              type="text"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Your Name"
+              required
+            />
           </div>
 
           <div className="space-y-2 pt-1">

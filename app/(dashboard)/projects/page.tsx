@@ -99,7 +99,11 @@ export default function ProjectsPage() {
   const fetchUsers = async () => {
     try {
       const res = await api.getAllUsers();
-      setAllUsers(res.users);
+      // Filter out Master Admin so master admin is never shown or assigned in project creation
+      const assignableUsers = (res.users || []).filter(
+        (u: any) => !u.isMasterAdmin && u.role !== 'MASTER_ADMIN'
+      );
+      setAllUsers(assignableUsers);
     } catch {
       // ignore
     }
@@ -168,7 +172,8 @@ export default function ProjectsPage() {
         notes: notes.trim() || undefined,
         techStack: techStackObj,
         wpConfig: wpConfigObj,
-        assignedMemberIds: selectedMemberIds.length > 0 ? selectedMemberIds : undefined,
+        assignedMemberIds: selectedMemberIds,
+        initialMemberIds: selectedMemberIds,
       });
 
       toast.success(`Project "${name}" created successfully`);
@@ -203,7 +208,10 @@ export default function ProjectsPage() {
           </p>
         </div>
         <Button
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            setSelectedMemberIds([]);
+            setCreateOpen(true);
+          }}
           className="gap-1.5 h-9 px-4 rounded-[6px] bg-ink hover:bg-ink/90 text-on-primary shadow-vercel"
         >
           <Plus className="h-4 w-4" />
@@ -398,16 +406,16 @@ export default function ProjectsPage() {
 
       {/* Create Project Modal */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent onClose={() => setCreateOpen(false)}>
-          <form onSubmit={handleCreateProject}>
-            <DialogHeader>
+        <DialogContent onClose={() => setCreateOpen(false)} className="max-w-2xl max-h-[88vh] flex flex-col p-0 overflow-hidden">
+          <form onSubmit={handleCreateProject} className="flex flex-col max-h-[88vh]">
+            <DialogHeader className="p-6 pb-4 border-b border-border shrink-0">
               <DialogTitle>Create New Project</DialogTitle>
               <DialogDescription>
-                Define your project and configure its technology stack or WordPress properties.
+                Define your project and configure its technology stack, team members, or WordPress properties.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="space-y-4 overflow-y-auto p-6 flex-1 pr-5">
               {/* Basic Fields */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-ink">Project Name *</label>
@@ -604,7 +612,7 @@ export default function ProjectsPage() {
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="p-4 px-6 border-t border-border bg-muted/20 shrink-0">
               <Button
                 type="button"
                 variant="outline"

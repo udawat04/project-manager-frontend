@@ -236,10 +236,10 @@ export const api = {
   // Members
   getProjectMembers: (projectId: string) =>
     apiRequest<{ members: any[] }>(`/projects/${projectId}/members`),
-  assignProjectMember: (projectId: string, userId: string) =>
-    apiRequest<{ membership: any }>(`/projects/${projectId}/members`, {
+  assignProjectMember: (projectId: string, userIds: string | string[]) =>
+    apiRequest<{ memberships?: any[]; membership?: any; message?: string }>(`/projects/${projectId}/members`, {
       method: 'POST',
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify(Array.isArray(userIds) ? { userIds } : { userId: userIds }),
     }),
   removeProjectMember: (projectId: string, userId: string) =>
     apiRequest<{ message: string }>(`/projects/${projectId}/members/${userId}`, {
@@ -249,11 +249,57 @@ export const api = {
     const query = search ? `?search=${encodeURIComponent(search)}` : '';
     return apiRequest<{ users: any[] }>(`/users${query}`);
   },
-  createUser: (data: { name: string; email: string; password?: string; assignedProjectIds?: string[] }) =>
+  getUserById: (id: string) =>
+    apiRequest<{ user: any }>(`/users/${id}`),
+  createUser: (data: {
+    name: string;
+    email: string;
+    role?: string;
+    title?: string;
+    phone?: string;
+    avatarUrl?: string | null;
+    assignedProjectIds?: string[];
+  }) =>
     apiRequest<{ user: any }>('/users', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  updateUser: (
+    id: string,
+    data: {
+      name?: string;
+      email?: string;
+      role?: string;
+      title?: string;
+      phone?: string;
+      avatarUrl?: string | null;
+      assignedProjectIds?: string[];
+    }
+  ) =>
+    apiRequest<{ user: any; message: string }>(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteUser: (id: string) =>
+    apiRequest<{ message: string }>(`/users/${id}`, {
+      method: 'DELETE',
+    }),
+  uploadMyAvatar: (file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return apiRequest<{ avatarUrl: string; user: any; message: string }>('/users/profile/avatar', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  uploadMemberAvatar: (userId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return apiRequest<{ avatarUrl: string; user: any; message: string }>(`/users/${userId}/avatar`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
 
 
   // Environments
@@ -433,10 +479,6 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
-
-  // User detail
-  getUserById: (id: string) =>
-    apiRequest<{ user: any }>(`/users/${id}`),
 
   // Direct apiRequest access
   apiRequest,
