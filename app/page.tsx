@@ -31,7 +31,7 @@ export default function LandingPage() {
   const [demoCopied, setDemoCopied] = React.useState(false);
 
   const handleCopyDemo = () => {
-    navigator.clipboard.writeText('postgresql://vault_admin:s3cr3t_p@ss@db.projectvault.io:5432/production_db');
+    navigator.clipboard.writeText('postgresql://vault_user:masked_secret@db.internal:5432/production_db');
     setDemoCopied(true);
     setTimeout(() => setDemoCopied(false), 2000);
   };
@@ -89,21 +89,11 @@ export default function LandingPage() {
                 </Button>
               </Link>
             ) : (
-              <>
-                <Link href="/login">
-                  <Button
-                    variant="ghost"
-                    className="h-8 px-3 text-xs font-medium text-ink hover:bg-canvas-soft rounded-[6px]"
-                  >
-                    Log In
-                  </Button>
-                </Link>
-                <Link href="/register">
-                  <Button className="h-8 px-3 text-xs font-medium rounded-[6px] bg-ink hover:bg-ink/90 text-on-primary shadow-vercel">
-                    Sign Up
-                  </Button>
-                </Link>
-              </>
+              <Link href="/login">
+                <Button className="h-8 px-3 text-xs font-medium rounded-[6px] bg-ink hover:bg-ink/90 text-on-primary shadow-vercel">
+                  Sign In
+                </Button>
+              </Link>
             )}
           </div>
         </div>
@@ -142,9 +132,9 @@ export default function LandingPage() {
 
           {/* 100px Pill CTAs (Marketing Scale) */}
           <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href={user ? '/dashboard' : '/register'}>
+            <Link href={user ? '/dashboard' : '/login'}>
               <button className="h-12 px-7 rounded-full bg-ink hover:bg-ink/90 text-on-primary text-sm font-medium shadow-vercel-float hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center gap-2">
-                <span>Start Vaulting Free</span>
+                <span>{user ? 'Open Dashboard' : 'Access Vault'}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </Link>
@@ -184,7 +174,7 @@ export default function LandingPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-body font-mono text-xs truncate max-w-[240px] sm:max-w-xs">
                       {demoRevealed
-                        ? 'postgresql://vault_admin:s3cr3t_p@ss@db.projectvault.io:5432/production_db'
+                        ? 'postgresql://vault_user:masked_secret@db.internal:5432/production_db'
                         : '••••••••••••••••••••••••••••••••••••••••'}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
@@ -336,7 +326,7 @@ export default function LandingPage() {
               <span>projectvault-audit.log</span>
               <span className="text-emerald-400 font-sans">LIVE STREAMING</span>
             </div>
-            <p><span className="text-cyan">[2026-09-06 23:05:12 UTC]</span> <span className="text-amber-400">AUDIT_LOG:</span> User &quot;Prince&quot; (prince@projectvault.io) revealed DATABASE_URL in PG Ledger (Production)</p>
+            <p><span className="text-cyan">[2026-09-06 23:05:12 UTC]</span> <span className="text-amber-400">AUDIT_LOG:</span> User &quot;Lead Admin&quot; (audit@internal.company) revealed DATABASE_URL in Core Backend (Production)</p>
             <p><span className="text-cyan">[2026-09-06 23:05:42 UTC]</span> <span className="text-blue-400">AUTO_MASK:</span> 30-second TTL expired. Decrypted memory cleared from client state.</p>
             <p><span className="text-cyan">[2026-09-06 23:06:01 UTC]</span> <span className="text-purple-400">PLATFORM_CONNECT:</span> Connected Cloudflare Account (ID: acc_client_01) to Apex Dental Care</p>
           </div>

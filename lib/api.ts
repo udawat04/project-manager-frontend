@@ -166,6 +166,31 @@ export const api = {
     }),
   getMe: () =>
     apiRequest<{ user: any }>('/auth/me'),
+  forgotPassword: (email: string) =>
+    apiRequest<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (data: { email: string; otp: string; newPassword: string }) =>
+    apiRequest<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  sendSecurityOtp: (purpose: 'PASSWORD_CHANGE' | 'PROFILE_UPDATE') =>
+    apiRequest<{ message: string }>('/auth/send-security-otp', {
+      method: 'POST',
+      body: JSON.stringify({ purpose }),
+    }),
+  changePassword: (data: { currentPassword: string; newPassword: string; otp: string }) =>
+    apiRequest<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateProfile: (data: { name?: string; avatarUrl?: string | null; email?: string; otp?: string }) =>
+    apiRequest<{ user: any; message: string }>('/users/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 
   // Dashboard
   getDashboardStats: () =>
