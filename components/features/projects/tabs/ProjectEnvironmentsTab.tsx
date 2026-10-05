@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EnvVariableTable, EnvVarItem } from '@/components/features/environments/EnvVariableTable';
 import { EnvImportDialog } from '@/components/features/EnvImportDialog';
+import { AccessControlModal } from '@/components/features/access/AccessControlModal';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -26,7 +27,9 @@ interface ProjectEnvironmentsTabProps {
   projectId: string;
   environments: any[];
   onEnvironmentCreated: () => void;
-  onActivityRefresh: () => void;
+  projectRole: string;
+  isMasterAdmin?: boolean;
+  onActivityRefresh?: () => void;
 }
 
 export function ProjectEnvironmentsTab({
@@ -34,7 +37,13 @@ export function ProjectEnvironmentsTab({
   environments,
   onEnvironmentCreated,
   onActivityRefresh,
+  projectRole,
+  isMasterAdmin,
 }: ProjectEnvironmentsTabProps) {
+  const allowEdit = isMasterAdmin || projectRole === 'EDITOR';
+  const allowCopy = isMasterAdmin || projectRole === 'EDITOR' || projectRole === 'VIEWER';
+  const allowReveal = isMasterAdmin || projectRole === 'EDITOR' || projectRole === 'VIEWER';
+  
   const [selectedEnvId, setSelectedEnvId] = React.useState<string>(
     environments.length > 0 ? environments[0].id : ''
   );
@@ -55,6 +64,11 @@ export function ProjectEnvironmentsTab({
   const [newEnvName, setNewEnvName] = React.useState('');
   const [importDialogOpen, setImportDialogOpen] = React.useState(false);
   const [importMode, setImportMode] = React.useState<'paste' | 'upload'>('paste');
+  const [accessModalOpen, setAccessModalOpen] = React.useState(false);
+  
+  const [accessDenied, setAccessDenied] = React.useState(false);
+  const [requestReason, setRequestReason] = React.useState('');
+  const [requestingAccess, setRequestingAccess] = React.useState(false);
 
   // Variable Add / Edit Dialog
   const [varModalOpen, setVarModalOpen] = React.useState(false);
@@ -74,6 +88,7 @@ export function ProjectEnvironmentsTab({
   const fetchVariables = async () => {
     if (!selectedEnvId) return;
     setLoading(true);
+    setAccessDenied(false);
     try {
       const res = await api.getVariables(selectedEnvId, {
         search: search.trim() || undefined,
@@ -81,9 +96,34 @@ export function ProjectEnvironmentsTab({
       });
       setVariables(res.variables);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load variables');
+      if (err.message?.toLowerCase().includes('explicit environment access') || err.message?.toLowerCase().includes('guests cannot access')) {
+        setAccessDenied(true);
+      } else {
+        toast.error(err.message || 'Failed to load variables');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestAccess = async () => {
+    if (!requestReason.trim()) {
+      toast.error('Please provide a reason');
+      return;
+    }
+    setRequestingAccess(true);
+    try {
+      await api.createAccessRequest({
+        resourceType: 'ENVIRONMENT',
+        resourceId: selectedEnvId,
+        reason: requestReason.trim(),
+      });
+      toast.success('Access request submitted successfully');
+      setRequestReason('');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to request access');
+    } finally {
+      setRequestingAccess(false);
     }
   };
 
@@ -120,7 +160,7 @@ export function ProjectEnvironmentsTab({
       setRevealedAllMap(map);
       setAutoHideSeconds(30);
       toast.warning(`${res.variables.length} secrets revealed. Auto-hiding in 30 seconds.`);
-      onActivityRefresh();
+      onActivityRefresh?.();
     } catch (err: any) {
       toast.error(err.message || 'Failed to reveal variables');
     }
@@ -139,7 +179,7 @@ export function ProjectEnvironmentsTab({
       const res = await api.exportVariables(selectedEnvId);
       await navigator.clipboard.writeText(res.content);
       toast.success(`Copied ${res.variableCount} variables in valid .env syntax to clipboard`);
-      onActivityRefresh();
+      onActivityRefresh?.();
     } catch (err: any) {
       toast.error(err.message || 'Failed to copy variables');
     }
@@ -160,7 +200,7 @@ export function ProjectEnvironmentsTab({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast.success(`Exported ${res.filename}`);
-      onActivityRefresh();
+      onActivityRefresh?.();
     } catch (err: any) {
       toast.error(err.message || 'Failed to export environment');
     }
@@ -195,7 +235,7 @@ export function ProjectEnvironmentsTab({
 
       setVarModalOpen(false);
       fetchVariables();
-      onActivityRefresh();
+      onActivityRefresh?.();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save variable');
     }
@@ -208,7 +248,7 @@ export function ProjectEnvironmentsTab({
       await api.deleteVariable(item.id);
       toast.success(`Deleted variable ${item.key}`);
       fetchVariables();
-      onActivityRefresh();
+      onActivityRefresh?.();
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete variable');
     }
@@ -261,63 +301,79 @@ export function ProjectEnvironmentsTab({
             </button>
           ))}
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs gap-1 rounded-[6px]"
-            onClick={() => setCreateEnvOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>New Environment</span>
-          </Button>
+          {allowEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1 rounded-[6px]"
+              onClick={() => setCreateEnvOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>New Environment</span>
+            </Button>
+          )}
         </div>
 
         {/* Bulk Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            onClick={() => {
-              setVarModalMode('create');
-              setEditVarId(null);
-              setVarKey('');
-              setVarValue('');
-              setVarSensitive(true);
-              setVarDesc('');
-              setVarModalOpen(true);
-            }}
-            className="h-8 text-xs gap-1.5 rounded-[6px]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Add Variable</span>
-          </Button>
+          {allowEdit && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setVarModalMode('create');
+                  setEditVarId(null);
+                  setVarKey('');
+                  setVarValue('');
+                  setVarSensitive(true);
+                  setVarDesc('');
+                  setVarModalOpen(true);
+                }}
+                className="h-8 text-xs gap-1.5 rounded-[6px]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Variable</span>
+              </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1.5 rounded-[6px]"
-            onClick={() => {
-              setImportMode('paste');
-              setImportDialogOpen(true);
-            }}
-          >
-            <FileText className="h-3.5 w-3.5" />
-            <span>Paste .env</span>
-          </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 rounded-[6px]"
+                onClick={() => setAccessModalOpen(true)}
+              >
+                <Lock className="h-3.5 w-3.5" />
+                <span>Manage Access</span>
+              </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1.5 rounded-[6px]"
-            onClick={() => {
-              setImportMode('upload');
-              setImportDialogOpen(true);
-            }}
-          >
-            <Upload className="h-3.5 w-3.5" />
-            <span>Import .env</span>
-          </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 rounded-[6px]"
+                onClick={() => {
+                  setImportMode('paste');
+                  setImportDialogOpen(true);
+                }}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>Paste .env</span>
+              </Button>
 
-          {isRevealedAll ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 rounded-[6px]"
+                onClick={() => {
+                  setImportMode('upload');
+                  setImportDialogOpen(true);
+                }}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span>Import .env</span>
+              </Button>
+            </>
+          )}
+
+          {allowReveal && (isRevealedAll ? (
             <Button
               size="sm"
               variant="secondary"
@@ -338,64 +394,92 @@ export function ProjectEnvironmentsTab({
               <Eye className="h-3.5 w-3.5" />
               <span>Reveal All</span>
             </Button>
+          ))}
+
+          {allowCopy && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 rounded-[6px]"
+                onClick={() => setCopyAllConfirmOpen(true)}
+                disabled={variables.length === 0}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                <span>Copy All</span>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 rounded-[6px]"
+                onClick={() => setExportConfirmOpen(true)}
+                disabled={variables.length === 0}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Export .env</span>
+              </Button>
+            </>
           )}
-
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1.5 rounded-[6px]"
-            onClick={() => setCopyAllConfirmOpen(true)}
-            disabled={variables.length === 0}
-          >
-            <Copy className="h-3.5 w-3.5" />
-            <span>Copy All</span>
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 text-xs gap-1.5 rounded-[6px]"
-            onClick={() => setExportConfirmOpen(true)}
-            disabled={variables.length === 0}
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Export .env</span>
-          </Button>
         </div>
       </div>
 
       {/* 2. Filter & Search Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-[8px] border border-border bg-card shadow-vercel">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="h-3.5 w-3.5 absolute left-3 top-3 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={`Search ${selectedEnv?.name || ''} variables...`}
-            className="pl-8 h-9 text-xs"
-          />
-        </div>
+      {!accessDenied && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-[8px] border border-border bg-card shadow-vercel">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-3 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Search ${selectedEnv?.name || ''} variables...`}
+              className="pl-8 h-9 text-xs"
+            />
+          </div>
 
-        <div className="flex items-center gap-1 bg-muted/80 p-1 rounded-[6px] text-xs">
-          {(['ALL', 'SENSITIVE', 'PUBLIC'] as const).map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setFilterSensitive(filter)}
-              className={`px-3 py-1 rounded-[4px] cursor-pointer transition-colors font-medium ${
-                filterSensitive === filter
-                  ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {filter === 'ALL' ? 'All' : filter === 'SENSITIVE' ? 'Sensitive' : 'Public'}
-            </button>
-          ))}
+          <div className="flex items-center gap-1 bg-muted/80 p-1 rounded-[6px] text-xs">
+            {(['ALL', 'SENSITIVE', 'PUBLIC'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setFilterSensitive(filter)}
+                className={`px-3 py-1 rounded-[4px] cursor-pointer transition-colors font-medium ${
+                  filterSensitive === filter
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {filter === 'ALL' ? 'All' : filter === 'SENSITIVE' ? 'Sensitive' : 'Public'}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 3. Variables Table */}
       <div className="rounded-[8px] border border-border bg-card overflow-hidden shadow-vercel">
-        {loading ? (
+        {accessDenied ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-destructive/10 text-destructive flex items-center justify-center">
+              <Lock className="h-8 w-8" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-ink">Access Denied</h3>
+              <p className="text-sm text-body max-w-md mx-auto mt-2">
+                You do not have permission to view variables for this environment. Please request access from an administrator.
+              </p>
+            </div>
+            <div className="w-full max-w-md mt-6 space-y-3">
+              <Input
+                placeholder="Reason for requesting access..."
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+              />
+              <Button className="w-full" onClick={handleRequestAccess} isLoading={requestingAccess} disabled={!requestReason.trim()}>
+                Request Access
+              </Button>
+            </div>
+          </div>
+        ) : loading ? (
           <TableSkeleton rows={4} />
         ) : variables.length === 0 ? (
           <div className="p-12 text-center space-y-3">
@@ -407,34 +491,39 @@ export function ProjectEnvironmentsTab({
               Add variables manually, paste your .env contents, or import an existing .env file.
             </p>
             <div className="flex items-center justify-center gap-2 pt-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  setVarModalMode('create');
-                  setVarKey('');
-                  setVarValue('');
-                  setVarModalOpen(true);
-                }}
-              >
-                Add Variable
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setImportMode('paste');
-                  setImportDialogOpen(true);
-                }}
-              >
-                Paste .env
-              </Button>
+              {allowEdit && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setVarModalMode('create');
+                      setEditVarId(null);
+                      setVarKey('');
+                      setVarValue('');
+                      setVarModalOpen(true);
+                    }}
+                  >
+                    Add Variable
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setImportMode('paste');
+                      setImportDialogOpen(true);
+                    }}
+                  >
+                    Paste .env
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         ) : (
           <EnvVariableTable
             variables={variables}
             revealedAllMap={revealedAllMap}
-            onEdit={(item) => {
+            onEdit={!allowEdit ? undefined : (item: EnvVarItem) => {
               setVarModalMode('edit');
               setEditVarId(item.id);
               setVarKey(item.key);
@@ -443,7 +532,10 @@ export function ProjectEnvironmentsTab({
               setVarDesc(item.description || '');
               setVarModalOpen(true);
             }}
-            onDelete={handleDeleteVariable}
+            onDelete={allowEdit ? handleDeleteVariable : () => {}}
+            allowReveal={allowReveal}
+            allowCopy={allowCopy}
+            allowEdit={allowEdit}
           />
         )}
       </div>
@@ -559,7 +651,7 @@ export function ProjectEnvironmentsTab({
         defaultMode={importMode}
         onSuccess={() => {
           fetchVariables();
-          onActivityRefresh();
+          onActivityRefresh?.();
         }}
       />
 
@@ -595,6 +687,17 @@ export function ProjectEnvironmentsTab({
           </form>
         </DialogContent>
       </Dialog>
+      {/* Access Control Modal */}
+      <AccessControlModal
+        open={accessModalOpen}
+        onOpenChange={setAccessModalOpen}
+        environmentId={selectedEnvId}
+        projectId={projectId}
+        onSuccess={() => {
+          fetchVariables();
+          onActivityRefresh?.();
+        }}
+      />
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
 export class ApiClientError extends Error {
@@ -207,6 +209,13 @@ export const api = {
       recentProjects: any[];
       recentActivities: any[];
     }>('/dashboard/stats'),
+  getDashboardConfig: () =>
+    apiRequest<{ config: any }>('/dashboard/config'),
+  updateDashboardConfig: (config: any) =>
+    apiRequest<{ config: any }>('/dashboard/config', {
+      method: 'PATCH',
+      body: JSON.stringify({ config }),
+    }),
 
   // Projects
   getProjects: (params?: { type?: string; status?: string; search?: string }) => {
@@ -241,6 +250,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(Array.isArray(userIds) ? { userIds } : { userId: userIds }),
     }),
+  assignProjectMemberWithRole: (projectId: string, userId: string, role: string) =>
+    apiRequest<{ memberships?: any[]; membership?: any; message?: string }>(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ userId, role }),
+    }),
+  updateProjectMemberRole: (projectId: string, userId: string, role: string) =>
+    apiRequest<{ message: string }>(`/projects/${projectId}/members/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
   removeProjectMember: (projectId: string, userId: string) =>
     apiRequest<{ message: string }>(`/projects/${projectId}/members/${userId}`, {
       method: 'DELETE',
@@ -259,6 +278,7 @@ export const api = {
     phone?: string;
     avatarUrl?: string | null;
     assignedProjectIds?: string[];
+    initialPassword?: string;
   }) =>
     apiRequest<{ user: any }>('/users', {
       method: 'POST',
@@ -274,6 +294,7 @@ export const api = {
       phone?: string;
       avatarUrl?: string | null;
       assignedProjectIds?: string[];
+      isActive?: boolean;
     }
   ) =>
     apiRequest<{ user: any; message: string }>(`/users/${id}`, {
@@ -447,6 +468,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ fieldName }),
     }),
+  getCredentialAccess: (id: string) =>
+    apiRequest<{ accesses: any[] }>(`/credentials/${id}/access`),
+  grantCredentialAccess: (id: string, data: { userIds: string[]; level: 'VIEW' | 'EDIT' }) =>
+    apiRequest<{ accesses: any[] }>(`/credentials/${id}/access`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeCredentialAccess: (id: string, userId: string) =>
+    apiRequest<{ message: string }>(`/credentials/${id}/access/${userId}`, {
+      method: 'DELETE',
+    }),
+
+
 
   // Global Search
   search: (q: string) =>
@@ -476,6 +510,303 @@ export const api = {
     }),
   updatePlatformAccount: (id: string, data: any) =>
     apiRequest<{ account: any }>(`/platform-accounts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Tasks
+  getProjectTasks: (projectId: string) =>
+    apiRequest<{ tasks: any[] }>(`/projects/${projectId}/tasks`),
+  getAllTasks: (params?: { projectId?: string; assigneeId?: string; status?: string; priority?: string; search?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.projectId) searchParams.set('projectId', params.projectId);
+    if (params?.assigneeId) searchParams.set('assigneeId', params.assigneeId);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.priority) searchParams.set('priority', params.priority);
+    if (params?.search) searchParams.set('search', params.search);
+    const qs = searchParams.toString();
+    return apiRequest<{ tasks: any[] }>(`/tasks${qs ? `?${qs}` : ''}`);
+  },
+  getTask: (id: string) =>
+    apiRequest<{ task: any }>(`/tasks/${id}`),
+  createTask: (
+    projectIdOrData: string | {
+      title: string;
+      description?: string;
+      status?: string;
+      priority?: string;
+      dueDate?: string | null;
+      assigneeId?: string | null;
+      projectId?: string | null;
+      tags?: string[];
+      parentId?: string | null;
+      subtasks?: any[];
+      attachments?: any[];
+    },
+    maybeData?: any
+  ) => {
+    let body: any;
+    let url = '/tasks';
+    if (typeof projectIdOrData === 'string' && maybeData) {
+      body = { ...maybeData };
+      if (projectIdOrData && projectIdOrData !== 'all' && projectIdOrData !== 'none') {
+        body.projectId = projectIdOrData;
+        url = `/projects/${projectIdOrData}/tasks`;
+      }
+    } else {
+      body = projectIdOrData;
+      if (body.projectId && body.projectId !== 'all' && body.projectId !== 'none') {
+        url = `/projects/${body.projectId}/tasks`;
+      }
+    }
+    return apiRequest<{ task: any }>(url, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  updateTask: (id: string, data: {
+    title?: string;
+    description?: string | null;
+    status?: string;
+    priority?: string;
+    dueDate?: string | null;
+    assigneeId?: string | null;
+    projectId?: string | null;
+    tags?: string[];
+    attachments?: any[];
+    parentId?: string | null;
+  }) =>
+    apiRequest<{ task: any }>(`/tasks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteTask: (id: string) =>
+    apiRequest<{ message: string }>(`/tasks/${id}`, {
+      method: 'DELETE',
+    }),
+  addSubtask: (taskId: string, data: { title: string; assigneeId?: string; priority?: string; dueDate?: string }) =>
+    apiRequest<{ subtask: any }>(`/tasks/${taskId}/subtasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  uploadTaskAttachment: async (taskId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiRequest<{ attachment: any; task: any }>(`/tasks/${taskId}/attachments`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  deleteTaskAttachment: (taskId: string, publicId: string) =>
+    apiRequest<{ task: any }>(`/tasks/${taskId}/attachments/${encodeURIComponent(publicId)}`, {
+      method: 'DELETE',
+    }),
+  importTasks: (tasks: any[]) =>
+    apiRequest<{ totalReceived: number; importedCount: number; errors: any[] }>('/tasks/import', {
+      method: 'POST',
+      body: JSON.stringify({ tasks }),
+    }),
+  exportTasksJson: async (projectId?: string) => {
+    const token = getStoredToken();
+    const url =
+      projectId && projectId !== 'all'
+        ? `${API_BASE_URL}/tasks/export?projectId=${encodeURIComponent(projectId)}&format=json`
+        : `${API_BASE_URL}/tasks/export?format=json`;
+    const res = await fetch(url, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      let errMsg = 'Failed to export tasks';
+      try {
+        const errJson = await res.json();
+        if (errJson?.error?.message) errMsg = errJson.error.message;
+        else if (errJson?.message) errMsg = errJson.message;
+      } catch {}
+      throw new Error(errMsg);
+    }
+    const data = await res.json();
+    const tasks = data?.data?.tasks || [];
+    const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: 'application/json' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = projectId && projectId !== 'all' ? `project-tasks-${projectId}.json` : 'tasks-export.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  exportTasksExcel: async (projectId?: string) => {
+    const token = getStoredToken();
+    const url =
+      projectId && projectId !== 'all'
+        ? `${API_BASE_URL}/tasks/export?projectId=${encodeURIComponent(projectId)}&format=json`
+        : `${API_BASE_URL}/tasks/export?format=json`;
+    const res = await fetch(url, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      let errMsg = 'Failed to export tasks';
+      try {
+        const errJson = await res.json();
+        if (errJson?.error?.message) errMsg = errJson.error.message;
+        else if (errJson?.message) errMsg = errJson.message;
+      } catch {}
+      throw new Error(errMsg);
+    }
+    const data = await res.json();
+    const tasks = data?.data?.tasks || [];
+
+    const rows = tasks.map((t: any) => ({
+      'Task ID': t.id,
+      'Title': t.title,
+      'Description': t.description || '',
+      'Status': t.status,
+      'Priority': t.priority,
+      'Project': t.project?.name || 'Standalone / No Project',
+      'Assignee Name': t.assignee?.name || 'Unassigned',
+      'Assignee Email': t.assignee?.email || '',
+      'Due Date': t.dueDate ? String(t.dueDate).split('T')[0] : '',
+      'Subtasks Count': t.subTasks?.length || 0,
+      'Tags': (t.tags || []).join(', '),
+      'Created At': t.createdAt ? String(t.createdAt).split('T')[0] : '',
+      'Completed At': t.completedAt ? String(t.completedAt).split('T')[0] : '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Tasks');
+    const filename = projectId && projectId !== 'all' ? `project-tasks-${projectId}.xlsx` : 'tasks-export.xlsx';
+    XLSX.writeFile(workbook, filename);
+  },
+
+  exportTasksCsv: async (projectId?: string) => {
+    // Fallback forwarding to Excel
+    return api.exportTasksExcel(projectId);
+  },
+
+  // Task Comments
+  getTaskComments: (taskId: string) =>
+    apiRequest<{ comments: any[] }>(`/tasks/${taskId}/comments`),
+  addTaskComment: (taskId: string, content: string) =>
+    apiRequest<{ comment: any }>(`/tasks/${taskId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    }),
+  updateTaskComment: (taskId: string, commentId: string, content: string) =>
+    apiRequest<{ comment: any }>(`/tasks/${taskId}/comments/${commentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    }),
+  deleteTaskComment: (taskId: string, commentId: string) =>
+    apiRequest<{ message: string }>(`/tasks/${taskId}/comments/${commentId}`, {
+      method: 'DELETE',
+    }),
+
+  // Access Control (Environments)
+  getEnvironmentAccessList: (envId: string) =>
+    apiRequest<{ accessList: any[] }>(`/environments/${envId}/access`),
+  grantEnvironmentAccess: (envId: string, data: { userId: string; level: string; expiresAt?: string }) =>
+    apiRequest<{ access: any }>(`/environments/${envId}/access`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  revokeEnvironmentAccess: (envId: string, userId: string) =>
+    apiRequest<{ message: string }>(`/environments/${envId}/access/${userId}`, {
+      method: 'DELETE',
+    }),
+  checkEnvironmentAccess: (envId: string) =>
+    apiRequest<{ hasAccess: boolean; access: any }>(`/environments/${envId}/check-access`),
+
+  // Access Requests
+  getAccessRequests: () =>
+    apiRequest<{ requests: any[] }>(`/access-requests`),
+  createAccessRequest: (data: { resourceType: string; resourceId: string; reason: string }) =>
+    apiRequest<{ request: any }>(`/access-requests`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  approveAccessRequest: (id: string, data?: { level?: string; expiresAt?: string }) =>
+    apiRequest<{ request: any }>(`/access-requests/${id}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify(data || {}),
+    }),
+  rejectAccessRequest: (id: string) =>
+    apiRequest<{ request: any }>(`/access-requests/${id}/reject`, {
+      method: 'PATCH',
+    }),
+
+  // Gmail
+  getGmailAuthUrl: () =>
+    apiRequest<{ url: string }>('/gmail/auth-url'),
+  getGmailAccountStatus: () =>
+    apiRequest<{ account: any }>('/gmail/account'),
+  disconnectGmail: () =>
+    apiRequest<{ message: string }>('/gmail/disconnect', { method: 'DELETE' }),
+
+
+  // Users
+  getUsers: (search?: string) => {
+    const query = new URLSearchParams();
+    if (search) query.set('search', search);
+    return apiRequest<{ users: any[] }>(`/users?${query.toString()}`);
+  },
+  syncGmail: () =>
+    apiRequest<{ message: string; count: number }>('/gmail/sync', { method: 'POST' }),
+  getGmailEmails: () =>
+    apiRequest<{ emails: any[] }>('/gmail/emails'),
+  getGmailEmailById: (id: string) =>
+    apiRequest<{ email: any }>(`/gmail/emails/${id}`),
+  deleteEmail: (id: string) =>
+    apiRequest<{ message: string }>(`/gmail/emails/${id}`, { method: 'DELETE' }),
+  replyToEmail: (id: string, data: { body: string }) =>
+    apiRequest<{ message: string }>(`/gmail/emails/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Conversations
+  getConversations: () =>
+    apiRequest<{ conversations: any[] }>('/conversations'),
+  getConversation: (id: string) =>
+    apiRequest<{ conversation: any }>(`/conversations/${id}`),
+  createConversation: (data: { type: string; name?: string; participantIds: string[]; projectId?: string }) =>
+    apiRequest<{ conversation: any }>('/conversations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Messages
+  getMessages: (conversationId: string) =>
+    apiRequest<{ messages: any[] }>(`/conversations/${conversationId}/messages`),
+  sendMessage: (conversationId: string, data: { content: string; attachments?: any[] }) =>
+    apiRequest<{ message: any }>(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Notifications
+  getNotifications: () =>
+    apiRequest<{ notifications: any[] }>('/notifications'),
+  getUnreadNotificationCount: () =>
+    apiRequest<{ count: number }>('/notifications/unread-count'),
+  markNotificationAsRead: (id: string) =>
+    apiRequest<{ message: string }>(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsAsRead: () =>
+    apiRequest<{ message: string }>('/notifications/read-all', { method: 'PATCH' }),
+  deleteNotification: (id: string) =>
+    apiRequest<{ message: string }>(`/notifications/${id}`, { method: 'DELETE' }),
+  clearAllNotifications: () =>
+    apiRequest<{ message: string }>('/notifications', { method: 'DELETE' }),
+  updateNotificationPreferences: (data: any) =>
+    apiRequest<{ message: string }>('/users/notification-preferences', {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),

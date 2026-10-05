@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { AuthProvider } from '@/providers/auth-provider';
+import { ChatProvider } from '@/providers/chat-provider';
 import { GlobalSearch } from '@/components/features/GlobalSearch';
 import { Toaster } from 'sonner';
 
@@ -20,9 +21,11 @@ export default function RootLayout({
       <body className="min-h-screen bg-background text-foreground antialiased font-sans">
         <ThemeProvider>
           <AuthProvider>
-            {children}
-            <GlobalSearch />
-            <Toaster position="bottom-right" theme="system" richColors closeButton />
+            <ChatProvider>
+              {children}
+              <GlobalSearch />
+              <Toaster position="bottom-right" theme="system" richColors closeButton />
+            </ChatProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

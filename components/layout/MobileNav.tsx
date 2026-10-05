@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Shield, X, LogOut } from 'lucide-react';
-import { NAVIGATION_ITEMS } from './Sidebar';
+import { getNavigationItems } from './Sidebar';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,9 @@ import { cn } from '@/lib/utils';
 export function MobileNav({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  
+  const isMasterAdmin = user?.isMasterAdmin || user?.role === 'MASTER_ADMIN';
+  const navItems = getNavigationItems(isMasterAdmin);
 
   React.useEffect(() => {
     if (open) {
@@ -50,7 +53,7 @@ export function MobileNav({ open, onClose }: { open: boolean; onClose: () => voi
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAVIGATION_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive =
               pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
             const Icon = item.icon;

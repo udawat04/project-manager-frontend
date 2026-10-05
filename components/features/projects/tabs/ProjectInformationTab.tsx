@@ -8,7 +8,7 @@ import { Pencil, ExternalLink } from 'lucide-react';
 
 interface ProjectInformationTabProps {
   project: any;
-  onEditClick: () => void;
+  onEditClick?: () => void;
 }
 
 export function ProjectInformationTab({
@@ -26,10 +26,12 @@ export function ProjectInformationTab({
             </p>
           </div>
 
-          <Button size="sm" onClick={onEditClick} className="gap-1.5 h-8 text-xs rounded-[6px]">
-            <Pencil className="h-3.5 w-3.5" />
-            <span>Edit Project Details</span>
-          </Button>
+          {onEditClick && (
+            <Button size="sm" onClick={onEditClick} className="gap-1.5 h-8 text-xs rounded-[6px]">
+              <Pencil className="h-3.5 w-3.5" />
+              <span>Edit Project Details</span>
+            </Button>
+          )}
         </div>
 
         {/* Core Metadata */}

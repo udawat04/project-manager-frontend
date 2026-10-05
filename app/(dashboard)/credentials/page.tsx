@@ -13,6 +13,8 @@ import {
   Plus,
   Layers,
   Building2,
+  Users,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,10 +25,14 @@ import { CustomSelect } from '@/components/ui/custom-select';
 import { CardSkeleton } from '@/components/loading';
 import { ProviderIcon } from '@/components/ui/provider-icon';
 import { SecretField } from '@/components/features/SecretField';
+import { CredentialAccessModal } from '@/components/features/credentials/CredentialAccessModal';
+import { useAuth } from '@/providers/auth-provider';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function GlobalCredentialsPage() {
+  const { user } = useAuth();
+  const isMasterAdmin = Boolean(user?.isMasterAdmin || user?.role === 'MASTER_ADMIN');
   const [credentials, setCredentials] = React.useState<any[]>([]);
   const [projects, setProjects] = React.useState<any[]>([]);
   const [platformAccounts, setPlatformAccounts] = React.useState<any[]>([]);
@@ -36,6 +42,10 @@ export default function GlobalCredentialsPage() {
   const [scopeTab, setScopeTab] = React.useState<'ALL' | 'PROJECT' | 'PLATFORM'>('ALL');
   const [selectedScopeFilter, setSelectedScopeFilter] = React.useState<string>('ALL');
   const [copyingId, setCopyingId] = React.useState<string | null>(null);
+
+  // Access modal
+  const [accessModalOpen, setAccessModalOpen] = React.useState(false);
+  const [activeCredForAccess, setActiveCredForAccess] = React.useState<any>(null);
 
   // Add Credential Modal
   const [addModalOpen, setAddModalOpen] = React.useState(false);
@@ -72,7 +82,12 @@ export default function GlobalCredentialsPage() {
         setTargetAccountId(accRes.accounts[0].id);
       }
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load credentials');
+      if (err.status === 403 || (err.message && err.message.toLowerCase().includes('authoriz'))) {
+        // Silently fail for non-admins to prevent red toasts
+        setCredentials([]);
+      } else {
+        toast.error(err.message || 'Failed to load credentials');
+      }
     } finally {
       setLoading(false);
     }
@@ -208,14 +223,16 @@ export default function GlobalCredentialsPage() {
           </p>
         </div>
 
-        <Button
-          variant="blue"
-          onClick={() => setAddModalOpen(true)}
-          className="gap-1.5 h-9 px-3.5 rounded-[6px] shadow-sm font-semibold self-start sm:self-auto"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add Credential</span>
-        </Button>
+        {isMasterAdmin && (
+          <Button
+            variant="blue"
+            onClick={() => setAddModalOpen(true)}
+            className="gap-1.5 h-9 px-3.5 rounded-[6px] shadow-sm font-semibold self-start sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add Credential</span>
+          </Button>
+        )}
       </div>
 
       {/* Scope Switcher Tabs: All vs Project-wise vs Platform-wise */}
@@ -355,20 +372,24 @@ export default function GlobalCredentialsPage() {
           <KeyRound className="h-8 w-8 mx-auto text-muted-foreground mb-2 stroke-1" />
           <p className="text-xs font-semibold text-foreground">No credentials found in this view</p>
           <p className="text-[11px] text-muted-foreground mt-1">
-            {scopeTab === 'PROJECT'
-              ? 'Add credentials directly scoped to one of your projects.'
-              : scopeTab === 'PLATFORM'
-              ? 'Add login credentials or API keys scoped to external platform accounts.'
-              : 'Try clearing your search query or switching scope tabs.'}
+            {isMasterAdmin
+              ? scopeTab === 'PROJECT'
+                ? 'Add credentials directly scoped to one of your projects.'
+                : scopeTab === 'PLATFORM'
+                ? 'Add login credentials or API keys scoped to external platform accounts.'
+                : 'Try clearing your search query or switching scope tabs.'
+              : 'No credentials have been shared with your account yet. A Master Admin can grant you access.'}
           </p>
-          <Button
-            size="sm"
-            variant="blue"
-            onClick={() => setAddModalOpen(true)}
-            className="mt-4 h-8 text-xs font-semibold"
-          >
-            Add Credential
-          </Button>
+          {isMasterAdmin && (
+            <Button
+              size="sm"
+              variant="blue"
+              onClick={() => setAddModalOpen(true)}
+              className="mt-4 h-8 text-xs font-semibold"
+            >
+              Add Credential
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -385,7 +406,24 @@ export default function GlobalCredentialsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-bold text-foreground">{cred.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-foreground">{cred.name}</h3>
+                      {!isMasterAdmin && (
+                        (() => {
+                          const userAccess = cred.accessList?.find((a: any) => a.userId === user?.id);
+                          return userAccess ? (
+                            <Badge
+                              variant={userAccess.level === 'EDIT' ? 'default' : 'secondary'}
+                              className={`text-[9px] font-mono uppercase px-1.5 py-0 ${
+                                userAccess.level === 'EDIT' ? 'bg-amber-600 text-white' : ''
+                              }`}
+                            >
+                              {userAccess.level === 'EDIT' ? 'CAN EDIT' : 'VIEW ONLY'}
+                            </Badge>
+                          ) : null;
+                        })()
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <Badge variant="outline" className="text-[10px] font-mono border-border">
                         {cred.type}
@@ -414,25 +452,68 @@ export default function GlobalCredentialsPage() {
                     </div>
                   </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCopyCredentialSet(cred)}
-                    disabled={copyingId === cred.id}
-                    className="h-7 px-2.5 text-[11px] gap-1 rounded-[6px] border-border font-mono"
-                  >
-                    {copyingId === cred.id ? (
-                      <>
-                        <Check className="h-3 w-3 text-emerald-600" />
-                        <span>Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        <span>Copy All</span>
-                      </>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isMasterAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1 border-border px-2"
+                        onClick={() => {
+                          setActiveCredForAccess(cred);
+                          setAccessModalOpen(true);
+                        }}
+                        title="Manage member access"
+                      >
+                        <Users className="h-3 w-3 text-primary" />
+                        <span>Access</span>
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                          {cred.accessList?.length || 0}
+                        </Badge>
+                      </Button>
                     )}
-                  </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopyCredentialSet(cred)}
+                      disabled={copyingId === cred.id}
+                      className="h-7 px-2.5 text-[11px] gap-1 rounded-[6px] border-border font-mono"
+                    >
+                      {copyingId === cred.id ? (
+                        <>
+                          <Check className="h-3 w-3 text-emerald-600" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3 w-3" />
+                          <span>Copy All</span>
+                        </>
+                      )}
+                    </Button>
+
+                    {isMasterAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={async () => {
+                          if (confirm(`Delete credential "${cred.name}"?`)) {
+                            try {
+                              await api.deleteCredential(cred.id);
+                              toast.success('Credential deleted');
+                              fetchCredentials();
+                            } catch (err: any) {
+                              toast.error(err.message || 'Failed to delete credential');
+                            }
+                          }
+                        }}
+                        title="Delete credential"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {cred.notes && (
@@ -449,6 +530,7 @@ export default function GlobalCredentialsPage() {
                         {f.name}:
                       </span>
                       <SecretField
+                        value={f.value}
                         isSensitive={f.isSensitive}
                         onReveal={async () => {
                           const res = await api.revealCredential(cred.id);
@@ -651,6 +733,18 @@ export default function GlobalCredentialsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Credential Access Management Modal */}
+      {activeCredForAccess && (
+        <CredentialAccessModal
+          open={accessModalOpen}
+          onOpenChange={setAccessModalOpen}
+          credentialId={activeCredForAccess.id}
+          credentialName={activeCredForAccess.name}
+          onAccessUpdated={fetchCredentials}
+        />
+      )}
     </div>
   );
 }
+

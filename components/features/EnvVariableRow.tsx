@@ -23,6 +23,9 @@ interface EnvVariableRowProps {
   revealedValue?: string;
   onEdit: (item: EnvVarItem) => void;
   onDelete: (item: EnvVarItem) => void;
+  allowReveal?: boolean;
+  allowCopy?: boolean;
+  allowEdit?: boolean;
 }
 
 export function EnvVariableRow({
@@ -30,6 +33,9 @@ export function EnvVariableRow({
   revealedValue,
   onEdit,
   onDelete,
+  allowReveal = true,
+  allowCopy = true,
+  allowEdit = true,
 }: EnvVariableRowProps) {
   const [localRevealed, setLocalRevealed] = React.useState<string | null>(
     revealedValue || null
@@ -72,27 +78,35 @@ export function EnvVariableRow({
   };
 
   const menuItems = [
-    {
-      label: 'Copy Value',
-      icon: <Copy className="h-3.5 w-3.5" />,
-      onClick: handleCopyValue,
-    },
-    {
-      label: 'Copy KEY=VALUE',
-      icon: <Copy className="h-3.5 w-3.5" />,
-      onClick: handleCopyKeyValue,
-    },
-    {
-      label: 'Edit',
-      icon: <Pencil className="h-3.5 w-3.5" />,
-      onClick: () => onEdit(item),
-    },
-    {
-      label: 'Delete',
-      icon: <Trash2 className="h-3.5 w-3.5" />,
-      onClick: () => onDelete(item),
-      destructive: true,
-    },
+    ...(allowCopy
+      ? [
+          {
+            label: 'Copy Value',
+            icon: <Copy className="h-3.5 w-3.5" />,
+            onClick: handleCopyValue,
+          },
+          {
+            label: 'Copy KEY=VALUE',
+            icon: <Copy className="h-3.5 w-3.5" />,
+            onClick: handleCopyKeyValue,
+          },
+        ]
+      : []),
+    ...(allowEdit
+      ? [
+          {
+            label: 'Edit',
+            icon: <Pencil className="h-3.5 w-3.5" />,
+            onClick: () => onEdit(item),
+          },
+          {
+            label: 'Delete',
+            icon: <Trash2 className="h-3.5 w-3.5" />,
+            onClick: () => onDelete(item),
+            destructive: true,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -128,6 +142,8 @@ export function EnvVariableRow({
             isSensitive={item.isSensitive}
             onReveal={handleReveal}
             onCopy={() => api.logCopyAction(item.id, 'VALUE')}
+            allowReveal={allowReveal}
+            allowCopy={allowCopy}
           />
         </td>
         <td className="py-3 px-4 align-middle text-right">
@@ -179,6 +195,8 @@ export function EnvVariableRow({
             isSensitive={item.isSensitive}
             onReveal={handleReveal}
             onCopy={() => api.logCopyAction(item.id, 'VALUE')}
+            allowReveal={allowReveal}
+            allowCopy={allowCopy}
           />
         </div>
       </div>

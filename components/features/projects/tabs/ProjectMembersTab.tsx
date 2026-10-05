@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ConfirmModal } from '@/components/ui/confirm-modal';
+import { CustomSelect } from '@/components/ui/custom-select';
 import { MemberCombobox } from '@/components/ui/member-combobox';
 import { MemberDetailModal } from '@/components/features/members/MemberDetailModal';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { formatTimeAgo, cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/providers/auth-provider';
 
 interface ProjectMembersTabProps {
   projectId: string;
@@ -52,7 +54,9 @@ export function ProjectMembersTab({
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [allUsers, setAllUsers] = React.useState<any[]>([]);
   const [selectedUserIds, setSelectedUserIds] = React.useState<string[]>([]);
+  const [selectedRole, setSelectedRole] = React.useState<string>('VIEWER');
   const [submitting, setSubmitting] = React.useState(false);
+  const { user } = useAuth();
 
   // Detail Modal
   const [detailModalOpen, setDetailModalOpen] = React.useState(false);
@@ -87,7 +91,10 @@ export function ProjectMembersTab({
 
     setSubmitting(true);
     try {
-      await api.assignProjectMember(projectId, selectedUserIds);
+      // Create member associations with roles
+      for (const uid of selectedUserIds) {
+        await api.assignProjectMemberWithRole(projectId, uid, selectedRole);
+      }
       toast.success(
         selectedUserIds.length === 1
           ? 'Member assigned to project'
@@ -95,6 +102,7 @@ export function ProjectMembersTab({
       );
       setAssignOpen(false);
       setSelectedUserIds([]);
+      setSelectedRole('VIEWER');
       onRefresh();
       onActivityRefresh();
     } catch (err: any) {
@@ -126,6 +134,16 @@ export function ProjectMembersTab({
 
   const availableUsers = allUsers.filter((u) => !members.some((m) => m.userId === u.id));
 
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      await api.updateProjectMemberRole(projectId, userId, newRole);
+      toast.success('Member role updated');
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update role');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -136,10 +154,12 @@ export function ProjectMembersTab({
           </p>
         </div>
 
-        <Button size="sm" onClick={openAssignModal} className="gap-1.5 h-8 text-xs rounded-[6px]">
-          <Plus className="h-3.5 w-3.5" />
-          <span>Assign Members</span>
-        </Button>
+        {user?.isMasterAdmin && (
+          <Button size="sm" onClick={openAssignModal} className="gap-1.5 h-8 text-xs rounded-[6px]">
+            <Plus className="h-3.5 w-3.5" />
+            <span>Assign Members</span>
+          </Button>
+        )}
       </div>
 
       <Card className="divide-y divide-border overflow-hidden shadow-vercel">
@@ -196,20 +216,40 @@ export function ProjectMembersTab({
                   </div>
                 </div>
 
-                {/* Assignment Time & Remove Button */}
+                {/* Assignment Time, Role & Remove Button */}
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-[11px] font-mono text-muted-foreground hidden sm:inline">
-                    Assigned {formatTimeAgo(m.assignedAt)}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:bg-destructive/10 h-7 text-xs gap-1"
-                    onClick={() => confirmRemove(m.userId, m.user?.name || 'Member')}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Remove</span>
-                  </Button>
+                  {user?.isMasterAdmin && (
+                    <>
+                      <div className="hidden sm:block w-28">
+                        <CustomSelect
+                          value={m.role || 'VIEWER'}
+                          onChange={(val) => handleRoleChange(m.userId, val)}
+                          options={[
+                            { value: 'EDITOR', label: 'Editor' },
+                            { value: 'VIEWER', label: 'Viewer' },
+                            { value: 'GUEST', label: 'Guest' }
+                          ]}
+                          className="h-7 text-[10px]"
+                        />
+                      </div>
+                      <span className="text-[11px] font-mono text-muted-foreground hidden lg:inline border-l border-border pl-3">
+                        {formatTimeAgo(m.assignedAt)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:bg-destructive/10 h-7 text-xs gap-1 ml-1"
+                        onClick={() => confirmRemove(m.userId, m.user?.name || 'Member')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                  {!user?.isMasterAdmin && (
+                    <span className="text-[11px] font-mono text-muted-foreground hidden lg:inline">
+                      {formatTimeAgo(m.assignedAt)}
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -262,7 +302,7 @@ export function ProjectMembersTab({
                     All eligible team members are already assigned to this project.
                   </p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <MemberCombobox
                       users={availableUsers}
                       selectedUserIds={selectedUserIds}
@@ -270,6 +310,32 @@ export function ProjectMembersTab({
                       multiple={true}
                       placeholder="Search members by name or email..."
                     />
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-foreground">Project Access Role</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { val: 'EDITOR', label: 'Editor', desc: 'Can edit environments and credentials' },
+                          { val: 'VIEWER', label: 'Viewer', desc: 'Can view environments and credentials' },
+                          { val: 'GUEST', label: 'Guest', desc: 'Cannot access environments or credentials' }
+                        ].map(roleOption => (
+                          <div 
+                            key={roleOption.val}
+                            onClick={() => setSelectedRole(roleOption.val)}
+                            className={cn(
+                              "border rounded-md p-2 cursor-pointer transition-all",
+                              selectedRole === roleOption.val ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-border-hover bg-card"
+                            )}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold">{roleOption.label}</span>
+                              <div className={cn("h-3 w-3 rounded-full border", selectedRole === roleOption.val ? "border-4 border-primary bg-background" : "border-muted-foreground/40")} />
+                            </div>
+                            <p className="text-[9px] text-muted-foreground leading-tight">{roleOption.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
                     {/* Quick multi-selection list */}
                     <div className="max-h-48 overflow-y-auto space-y-1 rounded-[6px] border border-border bg-muted/10 p-1.5">

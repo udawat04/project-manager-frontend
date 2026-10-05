@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/theme-provider';
 import { DropdownMenu } from '@/components/ui/dropdown-menu';
 import { MobileNav } from './MobileNav';
+import { NotificationBell } from '@/components/features/notifications/NotificationBell';
 
 export function Header({ title }: { title?: string }) {
   const { theme, setTheme } = useTheme();
@@ -76,6 +77,9 @@ export function Header({ title }: { title?: string }) {
               ⌘K
             </kbd>
           </button>
+
+          {/* Notifications */}
+          <NotificationBell />
 
           {/* Theme Switcher */}
           <DropdownMenu

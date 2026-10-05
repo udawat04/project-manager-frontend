@@ -105,6 +105,7 @@ export default function MembersPage() {
   const [newRole, setNewRole] = React.useState('DEVELOPER');
   const [newTitle, setNewTitle] = React.useState('');
   const [newPhone, setNewPhone] = React.useState('');
+  const [newPassword, setNewPassword] = React.useState('');
   const [newAvatarFile, setNewAvatarFile] = React.useState<File | null>(null);
   const [newAvatarPreview, setNewAvatarPreview] = React.useState<string | null>(null);
   const [assignedProjectIds, setAssignedProjectIds] = React.useState<string[]>([]);
@@ -217,6 +218,7 @@ export default function MembersPage() {
         name: newName.trim(),
         email: newEmail.trim(),
         role: newRole,
+        initialPassword: newPassword.trim() || undefined,
         title: newTitle.trim() || undefined,
         phone: newPhone.trim() || undefined,
         assignedProjectIds: assignedProjectIds.length > 0 ? assignedProjectIds : undefined,
@@ -238,6 +240,7 @@ export default function MembersPage() {
       setNewRole('DEVELOPER');
       setNewTitle('');
       setNewPhone('');
+      setNewPassword('');
       setNewAvatarFile(null);
       setNewAvatarPreview(null);
       setAssignedProjectIds([]);
@@ -306,6 +309,15 @@ export default function MembersPage() {
     } else {
       setEditAssignedProjectIds([...editAssignedProjectIds, projectId]);
     }
+  };
+
+  const generatePassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+    let pass = '';
+    for (let i = 0; i < 12; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewPassword(pass);
   };
 
   return (
@@ -457,9 +469,9 @@ export default function MembersPage() {
         <DialogContent className="max-w-md max-h-[88vh] flex flex-col p-0 overflow-hidden" onClose={() => setAddMemberOpen(false)}>
           <form onSubmit={handleAddMember} className="flex flex-col h-full max-h-[88vh] overflow-hidden">
             <DialogHeader className="p-5 pb-3 border-b border-border shrink-0 mb-0">
-              <DialogTitle>Add Team Member</DialogTitle>
+              <DialogTitle>Provision Team Member</DialogTitle>
               <DialogDescription>
-                Add a member with their project role. Members do not require login passwords in this version.
+                Create a new member account. They will be required to change their temporary password on first login.
               </DialogDescription>
             </DialogHeader>
 
@@ -526,6 +538,25 @@ export default function MembersPage() {
                   onChange={(e) => setNewPhone(e.target.value)}
                   placeholder="e.g. +1 234 567 890"
                 />
+              </div>
+
+              <div className="space-y-1.5 p-3 bg-muted/20 border border-border rounded-lg mt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground block">Temporary Password *</label>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-[10px]" onClick={generatePassword}>
+                    Generate Secure
+                  </Button>
+                </div>
+                <Input
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter temporary password"
+                  required
+                  className="font-mono text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Share this password with the user securely.
+                </p>
               </div>
 
               <div className="space-y-2 pt-1">

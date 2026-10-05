@@ -21,8 +21,11 @@ export interface EnvVarItem {
 interface EnvVariableTableProps {
   variables: EnvVarItem[];
   revealedAllMap: Record<string, string>;
-  onEdit: (item: EnvVarItem) => void;
   onDelete: (item: EnvVarItem) => void;
+  allowReveal?: boolean;
+  allowCopy?: boolean;
+  allowEdit?: boolean;
+  onEdit?: (item: EnvVarItem) => void;
 }
 
 export function EnvVariableTable({
@@ -30,6 +33,9 @@ export function EnvVariableTable({
   revealedAllMap,
   onEdit,
   onDelete,
+  allowReveal = true,
+  allowCopy = true,
+  allowEdit = true,
 }: EnvVariableTableProps) {
   return (
     <div className="w-full">
@@ -51,6 +57,9 @@ export function EnvVariableTable({
                 revealedValue={revealedAllMap[item.id]}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                allowReveal={allowReveal}
+                allowCopy={allowCopy}
+                allowEdit={allowEdit}
               />
             ))}
           </tbody>
@@ -66,6 +75,9 @@ export function EnvVariableTable({
             revealedValue={revealedAllMap[item.id]}
             onEdit={onEdit}
             onDelete={onDelete}
+            allowReveal={allowReveal}
+            allowCopy={allowCopy}
+            allowEdit={allowEdit}
           />
         ))}
       </div>
@@ -78,11 +90,17 @@ function EnvTableRow({
   revealedValue,
   onEdit,
   onDelete,
+  allowReveal,
+  allowCopy,
+  allowEdit,
 }: {
   item: EnvVarItem;
   revealedValue?: string;
-  onEdit: (item: EnvVarItem) => void;
+  onEdit?: (item: EnvVarItem) => void;
   onDelete: (item: EnvVarItem) => void;
+  allowReveal?: boolean;
+  allowCopy?: boolean;
+  allowEdit?: boolean;
 }) {
   const [localValue, setLocalValue] = React.useState<string | undefined>(revealedValue);
 
@@ -120,10 +138,18 @@ function EnvTableRow({
   };
 
   const menuItems = [
-    { label: 'Copy Value', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyValue },
-    { label: 'Copy KEY=VALUE', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyKeyValue },
-    { label: 'Edit', icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => onEdit(item) },
-    { label: 'Delete', icon: <Trash2 className="h-3.5 w-3.5" />, onClick: () => onDelete(item), destructive: true },
+    ...(allowCopy
+      ? [
+          { label: 'Copy Value', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyValue },
+          { label: 'Copy KEY=VALUE', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyKeyValue },
+        ]
+      : []),
+    ...(allowEdit
+      ? [
+          { label: 'Edit', icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => onEdit?.(item) },
+          { label: 'Delete', icon: <Trash2 className="h-3.5 w-3.5" />, onClick: () => onDelete(item), destructive: true },
+        ]
+      : []),
   ];
 
   return (
@@ -157,6 +183,8 @@ function EnvTableRow({
           isSensitive={item.isSensitive}
           onReveal={handleReveal}
           onCopy={() => api.logCopyAction(item.id, 'VALUE')}
+          allowReveal={allowReveal}
+          allowCopy={allowCopy}
         />
       </td>
       <td className="py-3 px-4 align-middle text-right">
@@ -178,11 +206,17 @@ function EnvMobileCard({
   revealedValue,
   onEdit,
   onDelete,
+  allowReveal,
+  allowCopy,
+  allowEdit,
 }: {
   item: EnvVarItem;
   revealedValue?: string;
-  onEdit: (item: EnvVarItem) => void;
+  onEdit?: (item: EnvVarItem) => void;
   onDelete: (item: EnvVarItem) => void;
+  allowReveal?: boolean;
+  allowCopy?: boolean;
+  allowEdit?: boolean;
 }) {
   const [localValue, setLocalValue] = React.useState<string | undefined>(revealedValue);
 
@@ -220,10 +254,18 @@ function EnvMobileCard({
   };
 
   const menuItems = [
-    { label: 'Copy Value', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyValue },
-    { label: 'Copy KEY=VALUE', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyKeyValue },
-    { label: 'Edit', icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => onEdit(item) },
-    { label: 'Delete', icon: <Trash2 className="h-3.5 w-3.5" />, onClick: () => onDelete(item), destructive: true },
+    ...(allowCopy
+      ? [
+          { label: 'Copy Value', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyValue },
+          { label: 'Copy KEY=VALUE', icon: <Copy className="h-3.5 w-3.5" />, onClick: handleCopyKeyValue },
+        ]
+      : []),
+    ...(allowEdit
+      ? [
+          { label: 'Edit', icon: <Pencil className="h-3.5 w-3.5" />, onClick: () => onEdit?.(item) },
+          { label: 'Delete', icon: <Trash2 className="h-3.5 w-3.5" />, onClick: () => onDelete(item), destructive: true },
+        ]
+      : []),
   ];
 
   return (

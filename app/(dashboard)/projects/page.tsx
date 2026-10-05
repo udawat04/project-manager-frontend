@@ -40,8 +40,10 @@ import {
 } from '@/lib/technologies';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/providers/auth-provider';
 
 export default function ProjectsPage() {
+  const { user } = useAuth();
   const [projects, setProjects] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [typeFilter, setTypeFilter] = React.useState<string>('ALL');
@@ -207,16 +209,18 @@ export default function ProjectsPage() {
             Manage your applications, WordPress deployments, and service ecosystems.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setSelectedMemberIds([]);
-            setCreateOpen(true);
-          }}
-          className="gap-1.5 h-9 px-4 rounded-[6px] bg-ink hover:bg-ink/90 text-on-primary shadow-vercel"
-        >
-          <Plus className="h-4 w-4" />
-          <span>New Project</span>
-        </Button>
+        {user?.isMasterAdmin && (
+          <Button
+            onClick={() => {
+              setSelectedMemberIds([]);
+              setCreateOpen(true);
+            }}
+            className="gap-1.5 h-9 px-4 rounded-[6px] bg-ink hover:bg-ink/90 text-on-primary shadow-vercel"
+          >
+            <Plus className="h-4 w-4" />
+            <span>New Project</span>
+          </Button>
+        )}
       </div>
 
       {/* Filter and Search Bar with Vercel Styling */}
@@ -305,8 +309,13 @@ export default function ProjectsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((proj) => (
-            <Link key={proj.id} href={`/projects/${proj.id}`}>
+          {projects.map((proj) => {
+            const totalTasks = proj.tasks?.length || 0;
+            const completedTasks = proj.tasks?.filter((t: any) => t.status === 'DONE').length || 0;
+            const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+            return (
+              <Link key={proj.id} href={`/projects/${proj.id}`}>
               <Card className="h-full hover:border-border-hover hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group border border-border bg-card shadow-xs">
                 <CardHeader className="p-5 pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -383,6 +392,23 @@ export default function ProjectsPage() {
                     </div>
                   )}
 
+                  {/* Task Progress Rollup */}
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between text-[11px] text-body">
+                      <span className="font-medium text-ink flex items-center gap-1">
+                        <FolderKanban className="h-3 w-3" />
+                        Tasks
+                      </span>
+                      <span>{completedTasks} / {totalTasks} ({progress}%)</span>
+                    </div>
+                    <div className="w-full bg-canvas-soft rounded-full h-1.5 border border-hairline overflow-hidden">
+                      <div 
+                        className="bg-primary h-1.5 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+
                   {/* Summary counts */}
                   <div className="flex items-center justify-between text-xs text-body pt-3 border-t border-hairline font-mono">
                     <span className="px-2 py-0.5 rounded-full bg-canvas-soft border border-hairline text-[10px] font-medium text-ink">
@@ -400,7 +426,8 @@ export default function ProjectsPage() {
                 </CardContent>
               </Card>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
 

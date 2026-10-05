@@ -18,6 +18,8 @@ export interface User {
   name: string;
   email: string;
   avatarUrl?: string | null;
+  role: string;
+  isMasterAdmin: boolean;
 }
 
 interface AuthContextType {

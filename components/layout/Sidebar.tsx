@@ -12,23 +12,63 @@ import {
   Settings,
   Shield,
   LogOut,
+  CheckSquare,
+  Mail,
+  MessageSquare,
+  Bell,
 } from 'lucide-react';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/providers/auth-provider';
+import { useChat } from '@/providers/chat-provider';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-export const NAVIGATION_ITEMS = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Projects', href: '/projects', icon: FolderKanban },
-  { name: 'Platforms', href: '/platforms', icon: Server },
-  { name: 'Credentials', href: '/credentials', icon: KeyRound },
-  { name: 'Members', href: '/members', icon: Users },
-  { name: 'Settings', href: '/settings', icon: Settings },
-];
+export const getNavigationItems = (isMasterAdmin?: boolean) => {
+  if (isMasterAdmin) {
+    return [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Projects', href: '/projects', icon: FolderKanban },
+      { name: 'Team Workload', href: '/admin/workload', icon: CheckSquare },
+      { name: 'Chat', href: '/chat', icon: MessageSquare },
+      { name: 'Notifications', href: '/notifications', icon: Bell },
+      { name: 'Email', href: '/email', icon: Mail },
+      { name: 'Platforms', href: '/platforms', icon: Server },
+      { name: 'Credentials', href: '/credentials', icon: KeyRound },
+      { name: 'Members', href: '/members', icon: Users },
+      { name: 'Settings', href: '/settings', icon: Settings },
+    ];
+  }
+
+  return [
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Projects', href: '/projects', icon: FolderKanban },
+    { name: 'Kanban Board', href: '/tasks', icon: CheckSquare },
+    { name: 'Chat', href: '/chat', icon: MessageSquare },
+    { name: 'Notifications', href: '/notifications', icon: Bell },
+    { name: 'Credentials', href: '/credentials', icon: KeyRound },
+  ];
+};
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { totalUnread } = useChat();
+  const [unreadNotifs, setUnreadNotifs] = React.useState(0);
+
+  const isMasterAdmin = user?.isMasterAdmin || user?.role === 'MASTER_ADMIN';
+  const navItems = getNavigationItems(isMasterAdmin);
+
+  React.useEffect(() => {
+    if (!user) return;
+    const fetchCount = () => {
+      api.getUnreadNotificationCount()
+        .then((res) => setUnreadNotifs(res.count || 0))
+        .catch(() => {});
+    };
+    fetchCount();
+    window.addEventListener('tasks_updated', fetchCount);
+    return () => window.removeEventListener('tasks_updated', fetchCount);
+  }, [user]);
 
   return (
     <aside className="hidden md:flex flex-col w-64 border-r border-border bg-card text-card-foreground shrink-0 h-screen sticky top-0">
@@ -45,7 +85,7 @@ export function Sidebar() {
 
       {/* Main Navigation Links */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAVIGATION_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive =
             pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
           const Icon = item.icon;
@@ -55,7 +95,7 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors relative',
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
@@ -63,6 +103,16 @@ export function Sidebar() {
             >
               <Icon className={cn('h-4 w-4', isActive ? 'text-primary-foreground' : 'text-muted-foreground')} />
               <span>{item.name}</span>
+              {item.name === 'Chat' && totalUnread > 0 && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full">
+                  {totalUnread}
+                </div>
+              )}
+              {item.name === 'Notifications' && unreadNotifs > 0 && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 bg-primary text-primary-foreground text-[10px] font-bold min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full">
+                  {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                </div>
+              )}
             </Link>
           );
         })}

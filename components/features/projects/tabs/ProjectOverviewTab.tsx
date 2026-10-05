@@ -15,7 +15,7 @@ interface ProjectOverviewTabProps {
   platformsCount: number;
   credentialsCount: number;
   membersCount: number;
-  onEditClick: () => void;
+  onEditClick?: () => void;
   onTabChange: (tab: string) => void;
 }
 
@@ -86,10 +86,12 @@ export function ProjectOverviewTab({
         <Card className="p-6 space-y-4 shadow-vercel">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold">Technology Stack</CardTitle>
-            <Button variant="ghost" size="sm" onClick={onEditClick} className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
-              <Pencil className="h-3 w-3" />
-              <span>Edit</span>
-            </Button>
+            {onEditClick && (
+              <Button variant="ghost" size="sm" onClick={onEditClick} className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
+                <Pencil className="h-3 w-3" />
+                <span>Edit</span>
+              </Button>
+            )}
           </div>
 
           {project.type === 'WORDPRESS' ? (
@@ -225,10 +227,12 @@ export function ProjectOverviewTab({
         <Card className="p-6 space-y-4 shadow-vercel">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold">Project URLs & Deployments</CardTitle>
-            <Button variant="ghost" size="sm" onClick={onEditClick} className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
-              <Pencil className="h-3 w-3" />
-              <span>Edit</span>
-            </Button>
+            {onEditClick && (
+              <Button variant="ghost" size="sm" onClick={onEditClick} className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
+                <Pencil className="h-3 w-3" />
+                <span>Edit</span>
+              </Button>
+            )}
           </div>
 
           <div className="space-y-3 text-xs">

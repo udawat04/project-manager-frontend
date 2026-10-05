@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Plus, KeyRound, Trash2 } from 'lucide-react';
+import { Plus, KeyRound, Trash2, Users, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,9 @@ import { ConfirmModal } from '@/components/ui/confirm-modal';
 import { CustomSelect } from '@/components/ui/custom-select';
 import { SecretField } from '@/components/features/SecretField';
 import { CopyAllCredentialsButton } from '@/components/features/credentials/CopyAllCredentialsButton';
+import { CredentialAccessModal } from '@/components/features/credentials/CredentialAccessModal';
 import { api } from '@/lib/api';
+import { useAuth } from '@/providers/auth-provider';
 import { toast } from 'sonner';
 
 interface ProjectCredentialsTabProps {
@@ -19,6 +21,8 @@ interface ProjectCredentialsTabProps {
   credentials: any[];
   onRefresh: () => void;
   onActivityRefresh: () => void;
+  projectRole: string;
+  isMasterAdmin?: boolean;
 }
 
 export function ProjectCredentialsTab({
@@ -26,8 +30,18 @@ export function ProjectCredentialsTab({
   credentials,
   onRefresh,
   onActivityRefresh,
+  projectRole,
+  isMasterAdmin,
 }: ProjectCredentialsTabProps) {
+  const { user } = useAuth();
+  const isMasterAdminUser = Boolean(isMasterAdmin || user?.role === 'MASTER_ADMIN' || user?.isMasterAdmin);
+  const allowCopy = true;
+  const allowReveal = true;
+
   const [addOpen, setAddOpen] = React.useState(false);
+  const [accessModalOpen, setAccessModalOpen] = React.useState(false);
+  const [activeCredForAccess, setActiveCredForAccess] = React.useState<any>(null);
+
   const [name, setName] = React.useState('');
   const [type, setType] = React.useState('API_KEY');
   const [fields, setFields] = React.useState<any[]>([
@@ -137,11 +151,15 @@ export function ProjectCredentialsTab({
         </div>
 
         <div className="flex items-center gap-2">
-          <CopyAllCredentialsButton projectId={projectId} credentialsCount={credentials.length} />
-          <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5 h-8 text-xs rounded-[6px]">
-            <Plus className="h-3.5 w-3.5" />
-            <span>Add Credential</span>
-          </Button>
+          {credentials.length > 0 && (
+            <CopyAllCredentialsButton projectId={projectId} credentialsCount={credentials.length} />
+          )}
+          {isMasterAdminUser && (
+            <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5 h-8 text-xs rounded-[6px]">
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Credential</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -150,11 +168,15 @@ export function ProjectCredentialsTab({
           <KeyRound className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
           <p className="text-sm font-semibold text-foreground">No credentials stored</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-            Store Stripe, OpenAI, Cloudinary, or database passwords securely.
+            {isMasterAdminUser
+              ? 'Store Stripe, OpenAI, Cloudinary, or database passwords securely.'
+              : 'No credentials shared with your account in this project vault yet.'}
           </p>
-          <Button size="sm" onClick={() => setAddOpen(true)} className="mt-4">
-            Add First Credential
-          </Button>
+          {isMasterAdminUser && (
+            <Button size="sm" onClick={() => setAddOpen(true)} className="mt-4">
+              Add First Credential
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -162,20 +184,58 @@ export function ProjectCredentialsTab({
             <Card key={cred.id} className="p-5 space-y-4 shadow-vercel">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-bold text-sm text-foreground">{cred.name}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-foreground">{cred.name}</h3>
+                    {!isMasterAdminUser && (
+                      (() => {
+                        const userAccess = cred.accessList?.find((a: any) => a.userId === user?.id);
+                        return userAccess ? (
+                          <Badge
+                            variant={userAccess.level === 'EDIT' ? 'default' : 'secondary'}
+                            className={`text-[9px] font-mono uppercase px-1.5 py-0 ${
+                              userAccess.level === 'EDIT' ? 'bg-amber-600 text-white' : ''
+                            }`}
+                          >
+                            {userAccess.level === 'EDIT' ? 'CAN EDIT' : 'VIEW ONLY'}
+                          </Badge>
+                        ) : null;
+                      })()
+                    )}
+                  </div>
                   <Badge variant="outline" className="text-[10px] font-mono mt-1">
                     {cred.type}
                   </Badge>
                 </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  onClick={() => confirmDelete(cred.id, cred.name)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                {isMasterAdminUser && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-border px-2"
+                      onClick={() => {
+                        setActiveCredForAccess(cred);
+                        setAccessModalOpen(true);
+                      }}
+                      title="Manage member access"
+                    >
+                      <Users className="h-3 w-3 text-primary" />
+                      <span>Access</span>
+                      <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
+                        {cred.accessList?.length || 0}
+                      </Badge>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => confirmDelete(cred.id, cred.name)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2 pt-2 border-t border-border/50">
@@ -183,6 +243,7 @@ export function ProjectCredentialsTab({
                   <div key={field.id} className="flex items-center justify-between text-xs">
                     <span className="font-mono text-muted-foreground font-medium">{field.name}:</span>
                     <SecretField
+                      value={field.value}
                       isSensitive={field.isSensitive}
                       onReveal={async () => {
                         const res = await api.revealCredential(cred.id);
@@ -190,6 +251,8 @@ export function ProjectCredentialsTab({
                         return found ? found.value : '';
                       }}
                       onCopy={() => api.logCredentialCopy(cred.id, field.name)}
+                      allowReveal={allowReveal}
+                      allowCopy={allowCopy}
                     />
                   </div>
                 ))}
@@ -308,6 +371,21 @@ export function ProjectCredentialsTab({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Credential Access Management Modal */}
+      {activeCredForAccess && (
+        <CredentialAccessModal
+          open={accessModalOpen}
+          onOpenChange={setAccessModalOpen}
+          credentialId={activeCredForAccess.id}
+          credentialName={activeCredForAccess.name}
+          onAccessUpdated={() => {
+            onRefresh();
+            onActivityRefresh();
+          }}
+        />
+      )}
     </div>
   );
 }
+

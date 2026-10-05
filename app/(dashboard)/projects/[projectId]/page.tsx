@@ -14,6 +14,7 @@ import {
   Info,
   Activity,
   Layers,
+  CheckSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,12 +26,15 @@ import { ProjectCredentialsTab } from '@/components/features/projects/tabs/Proje
 import { ProjectMembersTab } from '@/components/features/projects/tabs/ProjectMembersTab';
 import { ProjectInformationTab } from '@/components/features/projects/tabs/ProjectInformationTab';
 import { ProjectActivityTab } from '@/components/features/projects/tabs/ProjectActivityTab';
+import { ProjectTasksTab } from '@/components/features/projects/tabs/ProjectTasksTab';
 import { ProjectEditModal } from '@/components/features/projects/ProjectEditModal';
 import { ProjectSkeleton } from '@/components/loading';
 import { api } from '@/lib/api';
+import { useAuth } from '@/providers/auth-provider';
 import { toast } from 'sonner';
 
 export default function ProjectDetailPage() {
+  const { user } = useAuth();
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -100,6 +104,16 @@ export default function ProjectDetailPage() {
   const platforms = project.platforms || [];
   const credentials = project.credentials || [];
   const members = project.members || [];
+  
+  // Find current user's role in this project
+  const userMember = members.find((m: any) => m.userId === user?.id);
+  // Master Admins get EDITOR implicitly unless assigned another role (or maybe just default EDITOR)
+  const isMasterAdmin = user?.role === 'MASTER_ADMIN' || user?.isMasterAdmin;
+  const projectRole = userMember?.role || (isMasterAdmin ? 'EDITOR' : 'GUEST');
+  
+  const totalTasks = project.tasks?.length || 0;
+  const completedTasks = project.tasks?.filter((t: any) => t.status === 'DONE').length || 0;
+  const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -138,6 +152,23 @@ export default function ProjectDetailPage() {
             <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
               {project.description || 'No description provided'}
             </p>
+            
+            {/* Task Progress Rollup */}
+            <div className="mt-4 max-w-xs space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-body">
+                <span className="font-medium text-ink flex items-center gap-1">
+                  <FolderKanban className="h-3 w-3" />
+                  Task Progress
+                </span>
+                <span>{completedTasks} / {totalTasks} ({progress}%)</span>
+              </div>
+              <div className="w-full bg-canvas-soft rounded-full h-1.5 border border-hairline overflow-hidden">
+                <div 
+                  className="bg-primary h-1.5 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -153,15 +184,17 @@ export default function ProjectDetailPage() {
               </a>
             )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditModalOpen(true)}
-              className="gap-1.5 h-8 text-xs rounded-[6px] border-hairline"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              <span>Edit Details</span>
-            </Button>
+            {projectRole === 'EDITOR' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditModalOpen(true)}
+                className="gap-1.5 h-8 text-xs rounded-[6px] border-hairline"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                <span>Edit Details</span>
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -174,9 +207,16 @@ export default function ProjectDetailPage() {
             <span>Overview</span>
           </TabsTrigger>
 
-          <TabsTrigger value="environments" badge={environments.length}>
-            <FolderKanban className="h-3.5 w-3.5" />
-            <span>Environments</span>
+          {projectRole !== 'GUEST' && (
+            <TabsTrigger value="environments" badge={environments.length}>
+              <FolderKanban className="h-3.5 w-3.5" />
+              <span>Environments</span>
+            </TabsTrigger>
+          )}
+
+          <TabsTrigger value="tasks">
+            <CheckSquare className="h-3.5 w-3.5" />
+            <span>Tasks</span>
           </TabsTrigger>
 
           <TabsTrigger value="platforms" badge={platforms.length}>
@@ -184,10 +224,12 @@ export default function ProjectDetailPage() {
             <span>Platforms</span>
           </TabsTrigger>
 
-          <TabsTrigger value="credentials" badge={credentials.length}>
-            <KeyRound className="h-3.5 w-3.5" />
-            <span>Credentials</span>
-          </TabsTrigger>
+          {projectRole !== 'GUEST' && (
+            <TabsTrigger value="credentials" badge={credentials.length}>
+              <KeyRound className="h-3.5 w-3.5" />
+              <span>Credentials</span>
+            </TabsTrigger>
+          )}
 
           <TabsTrigger value="members" badge={members.length}>
             <Users className="h-3.5 w-3.5" />
@@ -213,18 +255,29 @@ export default function ProjectDetailPage() {
             platformsCount={platforms.length}
             credentialsCount={credentials.length}
             membersCount={members.length}
-            onEditClick={() => setEditModalOpen(true)}
+            onEditClick={projectRole === 'EDITOR' ? () => setEditModalOpen(true) : undefined}
             onTabChange={handleTabChange}
           />
         </TabsContent>
 
         {/* Tab 2: Environments */}
-        <TabsContent value="environments">
-          <ProjectEnvironmentsTab
+        {projectRole !== 'GUEST' && (
+          <TabsContent value="environments">
+            <ProjectEnvironmentsTab
+              projectId={projectId}
+              environments={environments}
+              onEnvironmentCreated={fetchProject}
+              onActivityRefresh={fetchActivity}
+              projectRole={projectRole}
+            />
+          </TabsContent>
+        )}
+
+        {/* Tab: Tasks */}
+        <TabsContent value="tasks">
+          <ProjectTasksTab
             projectId={projectId}
-            environments={environments}
-            onEnvironmentCreated={fetchProject}
-            onActivityRefresh={fetchActivity}
+            projectMembers={members}
           />
         </TabsContent>
 
@@ -235,18 +288,24 @@ export default function ProjectDetailPage() {
             connectedPlatforms={platforms}
             onRefresh={fetchProject}
             onActivityRefresh={fetchActivity}
+            projectRole={projectRole}
+            isMasterAdmin={isMasterAdmin}
           />
         </TabsContent>
 
         {/* Tab 4: Credentials */}
-        <TabsContent value="credentials">
-          <ProjectCredentialsTab
-            projectId={projectId}
-            credentials={credentials}
-            onRefresh={fetchProject}
-            onActivityRefresh={fetchActivity}
-          />
-        </TabsContent>
+        {projectRole !== 'GUEST' && (
+          <TabsContent value="credentials" className="m-0 focus-visible:outline-none">
+            <ProjectCredentialsTab
+              projectId={projectId}
+              credentials={credentials}
+              onRefresh={fetchProject}
+              onActivityRefresh={fetchActivity}
+              projectRole={projectRole}
+              isMasterAdmin={isMasterAdmin}
+            />
+          </TabsContent>
+        )}
 
         {/* Tab 5: Members */}
         <TabsContent value="members">
@@ -262,7 +321,7 @@ export default function ProjectDetailPage() {
         <TabsContent value="information">
           <ProjectInformationTab
             project={project}
-            onEditClick={() => setEditModalOpen(true)}
+            onEditClick={projectRole === 'EDITOR' ? () => setEditModalOpen(true) : undefined}
           />
         </TabsContent>
 

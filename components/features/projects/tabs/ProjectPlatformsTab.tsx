@@ -18,6 +18,8 @@ interface ProjectPlatformsTabProps {
   connectedPlatforms: any[];
   onRefresh: () => void;
   onActivityRefresh: () => void;
+  projectRole?: string;
+  isMasterAdmin?: boolean;
 }
 
 export function ProjectPlatformsTab({
@@ -25,9 +27,14 @@ export function ProjectPlatformsTab({
   connectedPlatforms,
   onRefresh,
   onActivityRefresh,
+  projectRole,
+  isMasterAdmin,
 }: ProjectPlatformsTabProps) {
+  const canManage = Boolean(isMasterAdmin || projectRole === 'EDITOR');
   const [connectOpen, setConnectOpen] = React.useState(false);
+  const [platforms, setPlatforms] = React.useState<any[]>([]);
   const [allAccounts, setAllAccounts] = React.useState<any[]>([]);
+  const [selectedPlatformId, setSelectedPlatformId] = React.useState('');
   const [selectedAccountId, setSelectedAccountId] = React.useState('');
   const [resourceName, setResourceName] = React.useState('');
   const [resourceUrl, setResourceUrl] = React.useState('');
@@ -41,21 +48,82 @@ export function ProjectPlatformsTab({
 
   const openConnectModal = async () => {
     try {
-      const res = await api.getPlatformAccounts();
-      setAllAccounts(res.accounts);
-      if (res.accounts.length > 0) {
-        setSelectedAccountId(res.accounts[0].id);
+      const [accRes, platRes] = await Promise.all([
+        api.getPlatformAccounts(),
+        api.getPlatforms(),
+      ]);
+      setAllAccounts(accRes.accounts);
+
+      // Collect unique platforms with account counts
+      const platMap = new Map<string, any>();
+      accRes.accounts.forEach((acc) => {
+        if (acc.platform && !platMap.has(acc.platform.id)) {
+          const count = accRes.accounts.filter(
+            (a) => a.platformId === acc.platform.id || a.platform?.id === acc.platform.id
+          ).length;
+          platMap.set(acc.platform.id, {
+            ...acc.platform,
+            accountCount: count,
+          });
+        }
+      });
+
+      (platRes.platforms || []).forEach((p) => {
+        if (!platMap.has(p.id)) {
+          const count = accRes.accounts.filter(
+            (a) => a.platformId === p.id || a.platform?.id === p.id
+          ).length;
+          if (count > 0) {
+            platMap.set(p.id, { ...p, accountCount: count });
+          }
+        }
+      });
+
+      const platList = Array.from(platMap.values());
+      setPlatforms(platList);
+
+      if (platList.length > 0) {
+        const firstPlat = platList[0];
+        setSelectedPlatformId(firstPlat.id);
+        const filteredAccounts = accRes.accounts.filter(
+          (a) => a.platformId === firstPlat.id || a.platform?.id === firstPlat.id
+        );
+        if (filteredAccounts.length > 0) {
+          setSelectedAccountId(filteredAccounts[0].id);
+        } else {
+          setSelectedAccountId('');
+        }
+      } else {
+        setSelectedPlatformId('');
+        setSelectedAccountId('');
       }
+
       setConnectOpen(true);
     } catch {
       toast.error('Failed to load platform accounts');
     }
   };
 
+  const handlePlatformChange = (platId: string) => {
+    setSelectedPlatformId(platId);
+    const filteredAccounts = allAccounts.filter(
+      (a) => a.platformId === platId || a.platform?.id === platId
+    );
+    if (filteredAccounts.length > 0) {
+      setSelectedAccountId(filteredAccounts[0].id);
+    } else {
+      setSelectedAccountId('');
+    }
+  };
+
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedPlatformId) {
+      toast.error('Please choose a platform');
+      return;
+    }
     if (!selectedAccountId) {
-      toast.error('Please choose an account');
+      toast.error('Please choose an account for the selected platform');
       return;
     }
 
@@ -102,11 +170,19 @@ export function ProjectPlatformsTab({
     }
   };
 
-  const accountOptions = allAccounts.map((acc) => ({
-    value: acc.id,
-    label: `${acc.platform?.name || 'Platform'} - ${acc.name}`,
-    sublabel: acc.loginIdentifier,
+  const platformOptions = platforms.map((p) => ({
+    value: p.id,
+    label: p.name,
+    sublabel: `${p.accountCount || 0} account${p.accountCount === 1 ? '' : 's'} available`,
   }));
+
+  const accountOptions = allAccounts
+    .filter((acc) => acc.platformId === selectedPlatformId || acc.platform?.id === selectedPlatformId)
+    .map((acc) => ({
+      value: acc.id,
+      label: acc.name,
+      sublabel: acc.loginIdentifier || acc.accountUrl,
+    }));
 
   return (
     <div className="space-y-4">
@@ -118,10 +194,12 @@ export function ProjectPlatformsTab({
           </p>
         </div>
 
-        <Button size="sm" onClick={openConnectModal} className="gap-1.5 h-8 text-xs rounded-[6px]">
-          <Plus className="h-3.5 w-3.5" />
-          <span>Connect Platform</span>
-        </Button>
+        {canManage && (
+          <Button size="sm" onClick={openConnectModal} className="gap-1.5 h-8 text-xs rounded-[6px]">
+            <Plus className="h-3.5 w-3.5" />
+            <span>Connect Platform</span>
+          </Button>
+        )}
       </div>
 
       {connectedPlatforms.length === 0 ? (
@@ -129,11 +207,15 @@ export function ProjectPlatformsTab({
           <Server className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
           <p className="text-sm font-semibold text-foreground">No platforms connected</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-            Link an external hosting, database, or CDN account to record and access deployment infrastructure.
+            {canManage
+              ? 'Link an external hosting, database, or CDN account to record and access deployment infrastructure.'
+              : 'No external cloud platforms or hosting accounts have been connected to this project yet.'}
           </p>
-          <Button size="sm" onClick={openConnectModal} className="mt-4">
-            Connect First Platform
-          </Button>
+          {canManage && (
+            <Button size="sm" onClick={openConnectModal} className="mt-4">
+              Connect First Platform
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -186,22 +268,24 @@ export function ProjectPlatformsTab({
                 )}
               </div>
 
-              <div className="pt-2 border-t border-border flex justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10 h-7 text-xs gap-1"
-                  onClick={() =>
-                    confirmDisconnect(
-                      conn.id,
-                      `${conn.platformAccount?.platform?.name || 'Platform'} (${conn.platformAccount?.name})`
-                    )
-                  }
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Disconnect</span>
-                </Button>
-              </div>
+              {canManage && (
+                <div className="pt-2 border-t border-border flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:bg-destructive/10 h-7 text-xs gap-1"
+                    onClick={() =>
+                      confirmDisconnect(
+                        conn.id,
+                        `${conn.platformAccount?.platform?.name || 'Platform'} (${conn.platformAccount?.name})`
+                      )
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Disconnect</span>
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>
@@ -230,14 +314,39 @@ export function ProjectPlatformsTab({
             </DialogHeader>
 
             <div className="space-y-3.5">
+              {/* Step 1: Select Added Platform */}
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-foreground">Select Platform Account *</label>
+                <label className="text-xs font-semibold text-foreground">1. Select Platform *</label>
+                <CustomSelect
+                  value={selectedPlatformId}
+                  onChange={handlePlatformChange}
+                  options={platformOptions}
+                  placeholder={platforms.length === 0 ? 'No platforms available' : 'Choose a platform...'}
+                  disabled={platforms.length === 0}
+                />
+              </div>
+
+              {/* Step 2: Select Platform Account */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">2. Select Platform Account *</label>
                 <CustomSelect
                   value={selectedAccountId}
                   onChange={setSelectedAccountId}
                   options={accountOptions}
-                  placeholder="Choose an account..."
+                  placeholder={
+                    !selectedPlatformId
+                      ? 'Select a platform first...'
+                      : accountOptions.length === 0
+                      ? 'No accounts found for this platform'
+                      : 'Choose an account...'
+                  }
+                  disabled={!selectedPlatformId || accountOptions.length === 0}
                 />
+                {selectedPlatformId && accountOptions.length === 0 && (
+                  <p className="text-[11px] text-amber-500 mt-1">
+                    No accounts registered for this platform. Please add an account in the Platforms tab first.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -274,7 +383,7 @@ export function ProjectPlatformsTab({
               <Button variant="outline" onClick={() => setConnectOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" isLoading={submitting}>
+              <Button type="submit" isLoading={submitting} disabled={!selectedPlatformId || !selectedAccountId}>
                 Connect Account
               </Button>
             </DialogFooter>
