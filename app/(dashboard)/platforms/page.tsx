@@ -76,9 +76,11 @@ export default function PlatformsPage() {
 
       // Platforms with accounts are automatically considered added
       const withAccounts = res.platforms.filter((p: any) => p.accountCount > 0).map((p: any) => p.id);
-      const combined = Array.from(new Set([...initialAdded, ...withAccounts]));
+      const validPlatformIds = new Set(res.platforms.map((p: any) => p.id));
+      const validStored = initialAdded.filter((id) => validPlatformIds.has(id));
+      const combined = Array.from(new Set([...validStored, ...withAccounts]));
 
-      // If user had nothing saved and nothing with accounts, default to popular platforms
+      // If user had nothing saved or stored IDs belonged to a previous database, default to popular platforms
       if (combined.length === 0 && res.platforms.length > 0) {
         const defaults = res.platforms
           .filter((p: any) => ['vercel', 'supabase', 'cloudflare', 'github'].includes(p.slug))
